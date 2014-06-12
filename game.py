@@ -36,7 +36,7 @@ class Character(GameElement):
 
     def __init__(self):
         GameElement.__init__(self)
-        self.inventory = []
+        self.inventory = {}
 
 class Gem(GameElement):
     SOLID = False
@@ -44,21 +44,24 @@ class Gem(GameElement):
     TYPE = "gem"
 
     def interact(self, player):
-
-        player.inventory.append(self)
-        GAME_BOARD.draw_msg("You just acquired a %s gem! You have %d items!" % (self.COLOR, len(player.inventory)))
+        player.inventory[self.NAME] = player.inventory.get(self.NAME, []) + [self]
+        # player.inventory.append(self)
+        GAME_BOARD.draw_msg("You just acquired a %s! You have %d items! " % (self.NAME, len(player.inventory)))
         
 class BlueGem(Gem):
     IMAGE = "BlueGem"
     COLOR = "blue"
+    NAME = "blue gem"
 
 class GreenGem(Gem):
     IMAGE = "GreenGem"
     COLOR = "green"
+    NAME = "green gem"
 
 class OrangeGem(Gem):
     IMAGE = "OrangeGem"
     COLOR = "orange"
+    NAME = "orange gem"
 
 class Block(GameElement):
     IMAGE = "Block"
@@ -96,7 +99,7 @@ def initialize():
     GAME_BOARD.register(PLAYER)
     GAME_BOARD.set_el(2, 2, PLAYER)
 
-    GAME_BOARD.draw_msg("This game is wicked awesome.")
+    GAME_BOARD.draw_msg("This game is wicked awesome. ")
 
     gem1 = BlueGem()
     GAME_BOARD.register(gem1)
@@ -121,35 +124,37 @@ def in_boundary(x, y):
         return False
     return True
 
-def drop(color):
-    for item in PLAYER.inventory:
-        if item.COLOR == color:
-            PLAYER.inventory.remove(item)
+def drop(key):
+    msg = ""
+    inventory = PLAYER.inventory.get(key, [])
+    if len(inventory):
+        # drop the thing
+        dropped = inventory.pop()
+        msg = "You dropped a %s. You have %d %s(s) left. " % (dropped.NAME, len(inventory), dropped.NAME)
+        print PLAYER.inventory
+    else:
+        msg = "Error: can't drop what you don't have! "
+    return msg
 
-
-
-def itemize(mylist):
-    mydict = {}
+def itemize(mydict):
     summary = []
-    for item in mylist:
-        description = item.COLOR + ' ' + item.TYPE
-        mydict[description] = mydict.get(description, 0) + 1
-    for entry in mydict:
-        summary.append("%d %s(s)" % (mydict[entry], entry))
-
+    for k, v in mydict.iteritems():
+        summary.append("%d %s(s)" % (len(v), k))
     summary = ", ".join(summary)
-    GAME_BOARD.draw_msg("You have: %s." % summary)
 
+    msg = "You have: %s. " % summary
+
+    return msg
 
 def standard_keyboard():
     global K_STATE
     if KEYBOARD[key.D]:
-        GAME_BOARD.draw_msg("Do you want to drop something?")
+        GAME_BOARD.draw_msg("Do you want to drop something? ")
         K_STATE = 1
 
     if KEYBOARD[key.I]:
         stuff = PLAYER.inventory
-        itemize(stuff)
+        GAME_BOARD.draw_msg(itemize(stuff))
         
     direction = None
     if KEYBOARD[key.UP]:
@@ -176,33 +181,46 @@ def standard_keyboard():
 
 def alt_key_1():
     if KEYBOARD[key.Y]:
-        GAME_BOARD.draw_msg("Ok, let's do it.")
+        GAME_BOARD.draw_msg("Ok, let's do it. ")
         global K_STATE
         K_STATE = 2
     if KEYBOARD[key.N]:
-        GAME_BOARD.draw_msg("Alright, nevermind.")
+        GAME_BOARD.draw_msg("Alright, nevermind. ")
         global K_STATE
         K_STATE = 0
 
 def alt_key_2():
-    itemize(PLAYER.inventory)
     # insert print statement to user to pick which one to drop
-    GAME_BOARD.draw_msg("Choose your operation: \n 1) Drop a blue gem. \n 2) Drop an orange gem. \n 3) Drop a green gem. \n Press 'N' to cancel.")
 
-    if KEYBOARD[key._1]:
-        drop("blue")
-        GAME_BOARD.draw_msg("You have %d blue gems left.") 
+    #map items in inventory to strings '_1', '_2', etc.
+
+    GAME_BOARD.draw_msg("Choose your operation: 1) Drop a blue gem. 2) Drop an orange gem. 3) Drop a green gem. Press 'N' to cancel.")
+    global K_STATE
+
+    mystr = "_1"
+
+    if KEYBOARD[getattr(key, num)]:
+        msg = drop(item)
+        K_STATE = 3
     if KEYBOARD[key._2]:
-        drop("orange")
+        msg = drop("orange gem")
+        K_STATE = 3
     if KEYBOARD[key._3]:
-        drop("green")
+        msg = drop("green gem")
+        K_STATE = 3
     if KEYBOARD[key.N]:
         GAME_BOARD.draw_msg("Alright, nevermind.")
-        global K_STATE
         K_STATE = 0
 
-
-
+def alt_key_3():
+    # insert print statement confirming what was dropped
+    global K_STATE
+    GAME_BOARD.draw_msg(itemize(PLAYER.inventory) + "Do you want to drop anything else? (Y/N)")
+    if KEYBOARD[key.Y]:
+        K_STATE = 2
+    if KEYBOARD[key.N]:
+        GAME_BOARD.draw_msg("")
+        K_STATE = 0
 
 def keyboard_handler():
     global K_STATE
@@ -211,7 +229,9 @@ def keyboard_handler():
     if K_STATE == 1:
         alt_key_1()  
     if K_STATE == 2:
-        alt_key_2()             
+        alt_key_2()
+    if K_STATE == 3:
+        alt_key_3()             
 
 def interact(x, y, obstacle):
     if obstacle:
