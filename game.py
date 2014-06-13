@@ -74,6 +74,10 @@ class GrassBlock(Block):
 class StoneBlock(Block):
     IMAGE = "StoneBlock"
 
+class Heart(GameElement):
+    IMAGE = "Heart"
+    SOLID = True
+
 class Cat(GameElement):
     IMAGE = "Cat"
     SOLID = True
@@ -82,16 +86,26 @@ class Cat(GameElement):
         msg = ""
         print "The player has this stuff: ", itemize(PLAYER.inventory)
         for name, num in winning_combo.iteritems():
-            items = PLAYER.inventory[name]
-            if  len(items) > num:
-                msg = "You have too many %ss." % name
-                break
-            if len(items) < num:
-                msg = "Bring me more %ss." % name
+            items = PLAYER.inventory.get(name, False)
+            if items:
+                if  len(items) > num:
+                    msg = "Grumpy Cat says: Pshh. Too many %ss." % name
+                    break
+                if len(items) < num:
+                    msg = "Grumpy Cat says: Meh. Bring me more %ss." % name
+                    break
+            else:
+                msg = "Grumpy Cat says: Hmph...you don't even have any %ss." % name
                 break
         else:
-            msg = "You win!"
-        print msg
+            msg = "Grumpy Cat says: I guess that's ok."
+            x_cat = self.x
+            y_cat = self.y
+            heart = Heart()
+            GAME_BOARD.register(heart)
+            GAME_BOARD.set_el(x_cat, y_cat, heart)
+        GAME_BOARD.draw_msg(msg)
+        
 
 class ShortTree(GameElement):
     IMAGE = "ShortTree"
@@ -146,6 +160,7 @@ def gen_world():
 
 def initialize():
     """Put game initialization code here"""
+    global LEVEL_1
     LEVEL_1 = gen_world()
 
     for coord, kind in LEVEL_1.iteritems():
