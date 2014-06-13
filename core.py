@@ -8,7 +8,7 @@ class GameElement(object):
         self.x = None
         self.y = None
 
-    def interact(self, player):
+    def interact(self):
         pass
 
     def __str__(self):

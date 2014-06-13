@@ -3,6 +3,7 @@ import pyglet
 from pyglet.window import key
 from core import GameElement
 import sys
+import random
 
 #### DO NOT TOUCH ####
 GAME_BOARD = None
@@ -43,10 +44,10 @@ class Gem(GameElement):
     COLOR = "no color"
     TYPE = "gem"
 
-    def interact(self, player):
-        player.inventory[self.NAME] = player.inventory.get(self.NAME, []) + [self]
-        # player.inventory.append(self)
-        GAME_BOARD.draw_msg("You just acquired a %s! You have %d items! " % (self.NAME, len(player.inventory)))
+    def interact(self):
+        PLAYER.inventory[self.NAME] = PLAYER.inventory.get(self.NAME, []) + [self]
+        GAME_BOARD.draw_msg("You just acquired a %s! You have %d %s(s)! " % \
+        (self.NAME, len(PLAYER.inventory[self.NAME]), self.NAME) )
         
 class BlueGem(Gem):
     IMAGE = "BlueGem"
@@ -73,49 +74,87 @@ class GrassBlock(Block):
 class StoneBlock(Block):
     IMAGE = "StoneBlock"
 
+class Cat(GameElement):
+    IMAGE = "Cat"
+    SOLID = True
 
-####   End class definitions    ####
+    def interact(self):
+        msg = ""
+        print "The player has this stuff: ", itemize(PLAYER.inventory)
+        for name, num in winning_combo.iteritems():
+            items = PLAYER.inventory[name]
+            if  len(items) > num:
+                msg = "You have too many %ss." % name
+                break
+            if len(items) < num:
+                msg = "Bring me more %ss." % name
+                break
+        else:
+            msg = "You win!"
+        print msg
+
+class ShortTree(GameElement):
+    IMAGE = "ShortTree"
+    SOLID = True
+
+class TallTree(GameElement):
+    IMAGE = "TallTree"
+    SOLID = True
+
+
+
+def gen_world():
+    world = {}
+    coords = [(x,y) for x in range(10) for y in range(10)]
+
+    num_obstacles = random.randint(5, 9)
+    for i in range(num_obstacles):
+        c = random.choice(coords)
+        o = random.choice([Rock, ShortTree, TallTree])
+        world[c] = o
+        coords.remove(c)
+
+    num_gems = 15
+    gem_dict = {}
+    for i in range(num_gems):
+        c = random.choice(coords)
+        g = random.choice([BlueGem, OrangeGem, GreenGem])
+        world[c] = g
+        gem_dict[g.NAME] = gem_dict.get(g.NAME, 0) + 1
+        coords.remove(c)
+    print "Distribution of gems on the board: ", gem_dict
+
+    global winning_combo
+    winning_combo = {}
+    for name, num in gem_dict.iteritems():
+        rand_num = random.randint(1, num)
+        winning_combo[name] = rand_num
+    print "Winning combo: ", winning_combo
+
+    c1 = random.choice(coords)
+    world[c1] = Cat
+    coords.remove(c1)
+
+    global PLAYER
+    c2 = random.choice(coords)
+    PLAYER = Character()
+    GAME_BOARD.register(PLAYER)
+    GAME_BOARD.set_el(c2[0], c2[1], PLAYER)
+
+    return world
+
 
 def initialize():
     """Put game initialization code here"""
-    rock_positions = [
-            (2,1),
-            (1,2),
-            (3,2),
-            (2,3)
-            ]
-    rocks = []
-    for pos in rock_positions:
-        rock = Rock()
-        GAME_BOARD.register(rock)
-        GAME_BOARD.set_el(pos[0], pos[1], rock)
-        rocks.append(rock)
+    LEVEL_1 = gen_world()
 
-    rocks[-1].SOLID = False
-
-
-    global PLAYER
-    PLAYER = Character()
-    GAME_BOARD.register(PLAYER)
-    GAME_BOARD.set_el(2, 2, PLAYER)
+    for coord, kind in LEVEL_1.iteritems():
+        item = kind()
+        GAME_BOARD.register(item)
+        GAME_BOARD.set_el(coord[0], coord[1], item)
 
     GAME_BOARD.draw_msg("This game is wicked awesome. ")
 
-    gem1 = BlueGem()
-    GAME_BOARD.register(gem1)
-    GAME_BOARD.set_el(9 , 5, gem1)
-
-    gem2 = GreenGem()
-    GAME_BOARD.register(gem2)
-    GAME_BOARD.set_el(9, 4, gem2)
-
-    gem3 = OrangeGem()
-    GAME_BOARD.register(gem3)
-    GAME_BOARD.set_el(9, 7, gem3)
-
-    gem4 = BlueGem()
-    GAME_BOARD.register(gem4)
-    GAME_BOARD.set_el(9 , 9, gem4)
 
 def in_boundary(x, y):
     if x < 0 or x > (GAME_WIDTH - 1):
@@ -124,17 +163,26 @@ def in_boundary(x, y):
         return False
     return True
 
+def check_drop(object):
+    # check to see if there's room for the dropped item
+    potential_x = PLAYER.x - 1
+    obstacle = GAME_BOARD.get_el(potential_x, PLAYER.y)
+    if obstacle is None and in_boundary(potential_x, PLAYER.y):
+        GAME_BOARD.set_el(potential_x, PLAYER.y, object)
+        return True
+    return False
+
+
 def drop(key):
-    msg = ""
-    inventory = PLAYER.inventory.get(key, [])
-    if len(inventory):
-        # drop the thing
-        dropped = inventory.pop()
-        msg = "You dropped a %s. You have %d %s(s) left. " % (dropped.NAME, len(inventory), dropped.NAME)
-        print PLAYER.inventory
-    else:
-        msg = "Error: can't drop what you don't have! "
+    items = PLAYER.inventory.get(key, [])
+    if len(items):
+        if check_drop(items[-1]):
+            items.pop()
+            msg =  "Dropped a %s." % key
+        else:
+            msg = "Could not drop %s." % key
     return msg
+
 
 def itemize(mydict):
     summary = []
@@ -181,46 +229,34 @@ def standard_keyboard():
 
 def alt_key_1():
     if KEYBOARD[key.Y]:
-        GAME_BOARD.draw_msg("Ok, let's do it. ")
+        num_list = [n for n in range(1, len(PLAYER.inventory) + 1)]
+        key_mapping = zip(num_list, PLAYER.inventory)
+
+        msg = ["Choose your operation:"]
+        for num, item in key_mapping:
+            msg.append("Press %d to drop a %s." % (num, item))
+        msg.append("Press N to cancel.")
+        GAME_BOARD.draw_msg(' '.join(msg))
         global K_STATE
-        K_STATE = 2
+        K_STATE = key_mapping
+
     if KEYBOARD[key.N]:
         GAME_BOARD.draw_msg("Alright, nevermind. ")
         global K_STATE
         K_STATE = 0
 
 def alt_key_2():
-    # insert print statement to user to pick which one to drop
-
-    #map items in inventory to strings '_1', '_2', etc.
-
-    GAME_BOARD.draw_msg("Choose your operation: 1) Drop a blue gem. 2) Drop an orange gem. 3) Drop a green gem. Press 'N' to cancel.")
     global K_STATE
 
-    mystr = "_1"
-
-    if KEYBOARD[getattr(key, num)]:
-        msg = drop(item)
-        K_STATE = 3
-    if KEYBOARD[key._2]:
-        msg = drop("orange gem")
-        K_STATE = 3
-    if KEYBOARD[key._3]:
-        msg = drop("green gem")
-        K_STATE = 3
-    if KEYBOARD[key.N]:
-        GAME_BOARD.draw_msg("Alright, nevermind.")
-        K_STATE = 0
-
-def alt_key_3():
-    # insert print statement confirming what was dropped
-    global K_STATE
-    GAME_BOARD.draw_msg(itemize(PLAYER.inventory) + "Do you want to drop anything else? (Y/N)")
-    if KEYBOARD[key.Y]:
-        K_STATE = 2
-    if KEYBOARD[key.N]:
-        GAME_BOARD.draw_msg("")
-        K_STATE = 0
+    for num, item in K_STATE:
+        attr = '_%d' % num
+        if KEYBOARD[getattr(key, attr)]:
+            msg = drop(item)
+            GAME_BOARD.draw_msg(msg)
+            K_STATE = 0
+        if KEYBOARD[key.N]:
+            GAME_BOARD.draw_msg("Alright, nevermind.")
+            K_STATE = 0
 
 def keyboard_handler():
     global K_STATE
@@ -228,14 +264,12 @@ def keyboard_handler():
         standard_keyboard()
     if K_STATE == 1:
         alt_key_1()  
-    if K_STATE == 2:
-        alt_key_2()
-    if K_STATE == 3:
-        alt_key_3()             
+    if type(K_STATE) == list:
+        alt_key_2()           
 
 def interact(x, y, obstacle):
     if obstacle:
-        obstacle.interact(PLAYER)
+        obstacle.interact()
 
 def move(x, y, obstacle):
     if  obstacle is None or not obstacle.SOLID:
